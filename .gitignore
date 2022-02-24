@@ -1,0 +1,9 @@
+*.cmd
+*.mod.?
+*.mod
+*.ko
+buildroot_sdk/
+Module.symvers
+*.o
+modules.order
+qemu_bin/
