@@ -1,0 +1,11 @@
+gcc
+-std=gnu89
+# -I/usr/src/linux-headers-5.16.0-1-amd64/include
+# -I/usr/src/linux-headers-5.16.0-1-amd64/arch/x86/include
+# -I/usr/src/linux-headers-5.16.0-1-amd64/arch/x86/include/generated
+-I/usr/src/linux-headers-5.16.0-1-common/include
+-I/usr/src/linux-headers-5.16.0-1-common/arch/x86/include
+-I/usr/src/linux-headers-5.16.0-1-common/arch/x86/include/generated
+-include /usr/src/linux-headers-5.16.0-1-amd64/include/linux/kconfig.h
+-D__KERNEL__
+-DMODULE
