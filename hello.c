@@ -1,6 +1,8 @@
 #include "qemu/osdep.h"
 
 #include "hw/pci/pci.h"
+#include "hw/pci/pci_bus.h"
+#include "hw/irq.h"
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "qemu/osdep.h"
@@ -15,6 +17,16 @@
 struct hello {
     PCIDevice pdev;
     QemuMutex mutex;
+    /* PCI side space */
+    MemoryRegion pci_mmio;
+    MemoryRegion pci_io;
+
+    /* PCI registers (excluding pass-through) */
+    uint64_t pci_regs[0xf];
+    MemoryRegion pci_regs_mr;
+
+    /* Interrupt generation */
+    qemu_irq *qirqs;
 };
 
 #define TYPE_HELLO_DMA_DEVICE "hello"
@@ -25,10 +37,33 @@ static void hello_instance_init(Object *obj)
 //    struct hello *hello = ESC2(obj);
 }
 
+__attribute__((unused)) static void hello_set_irq(void *opaque, int irq_num, int level)
+{
+    struct hello *h = HELLO(opaque);
+    qemu_set_irq(h->qirqs[irq_num], level);
+}
+
+__attribute__((unused)) static int hello_map_irq(PCIDevice *pci_dev, int irq_num)
+{
+    return irq_num;
+}
+
 static void hello_realize(PCIDevice *pdev, Error **errp)
 {
-    struct hello *hello = HELLO(pdev);
-    qemu_mutex_init(&hello->mutex);
+    struct hello *h = HELLO(pdev);
+//     PCIHostState *pci = PCI_HOST_BRIDGE(pdev);
+    qemu_mutex_init(&h->mutex);
+
+    // initialize some memory
+    memory_region_init(&h->pci_io, OBJECT(h), "reg_io", 0x10000);
+    memory_region_init(&h->pci_mmio, OBJECT(h), "reg_mmio", 0x10000);
+
+//     pci->bus = pci_register_root_bus(pdev, pdev->id, hello_set_irq, hello_map_irq, h,
+//                                      &h->pci_mmio, &h->pci_io, 0, 4, TYPE_PNV_PHB4_ROOT_BUS);
+//     pci->bus = pci_register_root_bus(pdev, pdev->id, NULL, NULL, h,
+//                                      &h->pci_mmio, &h->pci_io, 0, 4, TYPE_PNV_PHB4_ROOT_BUS);
+//     pci_setup_iommu(pci->bus, hello_dma_iommu, h);
+//     pci->bus->flags |= PCI_BUS_EXTENDED_CONFIG_SPACE;
 }
 
 static void hello_uninit(PCIDevice *pdev)
