@@ -12,21 +12,64 @@
 #include "qom/object.h"
 #include "trace.h"
 
-#define HELLO_DEVICE_ID  0xb001
+#define HELLO_DEVICE_ID  0xbcc7
+#define HELLO_REG_SIZE   0x0200
+
+// Request address
+#define REQ_DATA_LO   0x048
+#define REQ_DATA_HI   0x04c
+#define REQ_ADDR_LO   0x050
+#define REQ_ADDR_HI   0x054
+#define REQ_BE_OPCODE 0x058
+
+// Acknowladge address
+#define ACK_DATA_LO   0x05c
+#define ACK_DATA_HI   0x060
+#define ACK_STATUS    0x064
+
+struct req {
+        uint32_t addr;
+        uint32_t data_lo;
+        uint32_t data_hi;
+        uint8_t  opcode;
+        uint8_t  be;
+};
 
 struct hello {
     PCIDevice pdev;
-    QemuMutex mutex;
-    /* PCI side space */
-    MemoryRegion pci_mmio;
-    MemoryRegion pci_io;
 
-    /* PCI registers (excluding pass-through) */
-    uint64_t pci_regs[0xf];
+//     uint64_t pci_regs[HELLO_REG_SIZE];
     MemoryRegion pci_regs_mr;
 
-    /* Interrupt generation */
-    qemu_irq *qirqs;
+    struct req *req;
+};
+
+
+static uint64_t hello_mem_read(void *opaque, hwaddr off, unsigned size)
+{
+    return 42;
+}
+
+static void hello_mem_write(void *opaque, hwaddr off, uint64_t val,
+                               unsigned size)
+{
+//     struct hello *h = HELLO(opaque);
+//     h->pci_regs[off] = val;
+}
+
+static const MemoryRegionOps hello_reg_ops = {
+    .read = hello_mem_read,
+    .write = hello_mem_write,
+    .endianness = DEVICE_BIG_ENDIAN,
+    .valid = {
+        .min_access_size = 8,
+        .max_access_size = 8,
+//         .accepts = hello_mmio_accepts,
+    },
+    .impl = {
+        .min_access_size = 8,
+        .max_access_size = 8,
+    },
 };
 
 #define TYPE_HELLO_DMA_DEVICE "hello"
@@ -34,13 +77,12 @@ DECLARE_INSTANCE_CHECKER(struct hello, HELLO, TYPE_HELLO_DMA_DEVICE)
 
 static void hello_instance_init(Object *obj)
 {
-//    struct hello *hello = ESC2(obj);
 }
 
 __attribute__((unused)) static void hello_set_irq(void *opaque, int irq_num, int level)
 {
-    struct hello *h = HELLO(opaque);
-    qemu_set_irq(h->qirqs[irq_num], level);
+//     struct hello *h = HELLO(opaque);
+//     qemu_set_irq(h->qirqs[irq_num], level);
 }
 
 __attribute__((unused)) static int hello_map_irq(PCIDevice *pci_dev, int irq_num)
@@ -51,26 +93,76 @@ __attribute__((unused)) static int hello_map_irq(PCIDevice *pci_dev, int irq_num
 static void hello_realize(PCIDevice *pdev, Error **errp)
 {
     struct hello *h = HELLO(pdev);
-//     PCIHostState *pci = PCI_HOST_BRIDGE(pdev);
-    qemu_mutex_init(&h->mutex);
+    h->req = g_malloc(sizeof(struct req));
 
     // initialize some memory
-    memory_region_init(&h->pci_io, OBJECT(h), "reg_io", 0x10000);
-    memory_region_init(&h->pci_mmio, OBJECT(h), "reg_mmio", 0x10000);
-
-//     pci->bus = pci_register_root_bus(pdev, pdev->id, hello_set_irq, hello_map_irq, h,
-//                                      &h->pci_mmio, &h->pci_io, 0, 4, TYPE_PNV_PHB4_ROOT_BUS);
-//     pci->bus = pci_register_root_bus(pdev, pdev->id, NULL, NULL, h,
-//                                      &h->pci_mmio, &h->pci_io, 0, 4, TYPE_PNV_PHB4_ROOT_BUS);
-//     pci_setup_iommu(pci->bus, hello_dma_iommu, h);
-//     pci->bus->flags |= PCI_BUS_EXTENDED_CONFIG_SPACE;
+    memory_region_init_io(&h->pci_regs_mr, OBJECT(h), &hello_reg_ops, h,
+            "reg_io", HELLO_REG_SIZE);
+    pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &h->pci_regs_mr);
 }
 
 static void hello_uninit(PCIDevice *pdev)
 {
-    struct hello *hello = HELLO(pdev);
+    struct hello *h = HELLO(pdev);
+    free(h->req);
+}
 
-    qemu_mutex_destroy(&hello->mutex);
+static uint32_t hello_pci_read_config(PCIDevice *dev, uint32_t addr, int len)
+{
+    uint32_t val;
+
+    val = pci_default_read_config(dev, addr, len);
+    qemu_log_mask(LOG_GUEST_ERROR, "!!! %s: addr:0x%x, l:0x%x\n", __func__, addr, len);
+
+    if (len != 1)
+        return val;
+
+    switch (addr) {
+    case 0x00:
+        val = 0xff;
+        break;
+    case ACK_DATA_LO:
+        // maybe add to req. struct
+        val = 0xaa;
+        break;
+    case ACK_DATA_HI:
+        // maybe add to req. struct
+        val = 0x55;
+        break;
+    case ACK_STATUS:
+        val = 0x01;
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: read status is fired!\n", __func__);
+        break;
+    default:
+    }
+
+    return val;
+
+}
+
+static void hello_pci_write_config(PCIDevice *pdev,
+        uint32_t addr, uint32_t val, int len)
+{
+    struct hello *h = HELLO(pdev);
+    switch (addr) {
+    case 0x80:
+        break;
+    case REQ_DATA_LO:
+        h->req->data_lo = val;
+        break;
+    case REQ_DATA_HI:
+        h->req->data_hi = val;
+        break;
+    case REQ_ADDR_LO:
+        h->req->addr = val;
+        break;
+    case REQ_BE_OPCODE:
+        h->req->opcode = val;
+        qemu_log_mask(LOG_GUEST_ERROR, "%s: write is fired!\n", __func__);
+        break;
+    default:
+        pci_default_write_config(pdev, addr, val, len);
+    }
 }
 
 static void hello_class_init(ObjectClass *class, void *data)
@@ -79,6 +171,8 @@ static void hello_class_init(ObjectClass *class, void *data)
     PCIDeviceClass *k = PCI_DEVICE_CLASS(class);
 
     k->realize = hello_realize;
+    k->config_write = hello_pci_write_config;
+    k->config_read = hello_pci_read_config;
     k->exit = hello_uninit;
     k->vendor_id = PCI_VENDOR_ID_INTEL;
     k->device_id = HELLO_DEVICE_ID;
