@@ -6,6 +6,6 @@
 },
 {
     "direcory": "qemu/hw/misc/",
-    "direcory": "qemu/hw/misc/hello.c"
+    "file": "qemu/hw/misc/hello.c"
 }
 ]

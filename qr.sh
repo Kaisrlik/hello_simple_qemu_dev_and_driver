@@ -12,10 +12,10 @@ fi
 
 set +x
 sudo "${CURDIR}/qemu_bin/usr/local/bin/qemu-system-x86_64" \
-	-M pc -kernel "${BUILDROOT}/bzImage" ${SERIAL} ${MONITOR} \
+	-M q35 -kernel "${BUILDROOT}/bzImage" ${SERIAL} ${MONITOR} \
 	-D /dev/stdout \
 	-drive file="${BUILDROOT}/rootfs.ext2",if=virtio,format=raw \
 	-append "rootwait root=/dev/vda console=tty1 console=ttyS0  nopat nokaslr norandmaps printk.devkmsg=on printk.time=y" \
 	-nographic -net nic,model=virtio -net user \
 	-virtfs local,path="${CURDIR}/linux/",mount_tag=host0,security_model=mapped,id=host0  \
-	-d guest_errors -device hello --trace hello_*
+	-d guest_errors -device hello,bus=pcie.0 --trace hello_*
