@@ -187,7 +187,7 @@ static void register_types(void)
         { INTERFACE_PCIE_DEVICE },
         { },
     };
-    static const TypeInfo escape_info = {
+    static const TypeInfo hello_info = {
         .name          = TYPE_HELLO_DMA_DEVICE,
         .parent        = TYPE_PCI_DEVICE,
         .instance_size = sizeof(struct hello),
@@ -196,6 +196,6 @@ static void register_types(void)
         .interfaces = interfaces,
     };
 
-    type_register_static(&escape_info);
+    type_register_static(&hello_info);
 }
 type_init(register_types)
